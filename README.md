@@ -23,7 +23,7 @@ Each file includes a small header indicating the upstream source URL and generat
 * **`cn4.nft`** - `set cn4 { ... }` for IPv4 (`type ipv4_addr; flags interval;`)
 * **`cn6.nft`** - `set cn6 { ... }` for IPv6 (`type ipv6_addr; flags interval;`)
 
-These files **only contain `set` definitions**. They are meant to be included inside your own nftables table, for example:
+These files **only contain `set` definitions** to maximize flexibility. They are meant to be included inside your own nftables table, for example:
 
 ```nft
 table inet my_table {
@@ -34,10 +34,49 @@ table inet my_table {
 
 ---
 
+## Sync Script
+
+A helper script `sync-cn-nft.sh` is provided to **periodically fetch nftables sets from GitHub Releases** and update local files safely.
+
+### Features
+
+* Fetch **IPv4**, **IPv6**, or **both**
+* Supports **GitHub mirrors** (e.g. `gh-proxy.com`)
+* Verifies:
+
+  * the fetched `.nft` file is **not empty**
+  * nftables **syntax check passes** (`nft -c`)
+* Uses **atomic replacement** to avoid partial updates
+
+### Example
+
+```
+./sync-cn-nft.sh \
+  --dest /etc/nftables.d \
+  --mode both
+```
+
+Using a GitHub download mirror:
+
+```
+./sync-cn-nft.sh \
+  --dest /etc/nftables.d \
+  --mode both \
+  --mirror-prefix "https://gh-proxy.com/"
+```
+
+Further help see when running the script with `--help`:
+
+```
+./sync-cn-nft.sh --help
+```
+
+---
+
 ## Upstream Sources
 
-* **IPv4**: `chnroutes2-optimized` by SukkaW
-* **IPv6**: configurable upstream source (URL recorded in the generated file headers)
+* **IPv4**: [`chnroutes2-optimized`](https://github.com/SukkaW/chnroutes2-optimized) by SukkaW
+* **IPv6**: [`Sukka Ruleset`](https://github.com/SukkaW/Surge) by SukkaW
 
 The generated outputs embed the **upstream URL** in their headers for traceability.
 
@@ -46,5 +85,9 @@ The generated outputs embed the **upstream URL** in their headers for traceabili
 ## License
 
 This repository follows MIT License for its code.
+
 Any content redistributed and processed by this repository is subject to the **license(s) of the upstream data sources**.
 Please refer to the upstream projects for their specific licensing terms.
+
+By using the generated outputs, you agree to comply with the respective upstream licenses.
+
