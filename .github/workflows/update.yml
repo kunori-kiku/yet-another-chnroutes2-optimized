@@ -1,0 +1,56 @@
+name: Update CN routes (every 2 hours)
+
+on:
+  schedule:
+    - cron: "0 */2 * * *"   # UTC, every 2 hours
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cnroutes-update
+  cancel-in-progress: true
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libcurl4-openssl-dev
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j
+
+      - name: Generate outputs
+        run: |
+          ./build/cnroutes_aggregator \
+            --v4-url "https://chnroutes2.cdn.skk.moe/chnroutes.txt" \
+            --v4-proto "CC BY-SA 2.0" \
+            --v6-url "https://ruleset.skk.moe/Clash/ip/china_ip_ipv6.txt" \
+            --v6-proto "CC BY-SA 2.0" \
+            --out-dir "dist"
+
+      - name: Release (stable, overwrite assets)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "cnroutes-latest"
+          name: "CN Routes (auto)"
+          target_commitish: ${{ github.sha }}
+          draft: false
+          prerelease: false
+          make_latest: true
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/ip4.txt
+            dist/ip6.txt
+            dist/cn4.nft
+            dist/cn6.nft
