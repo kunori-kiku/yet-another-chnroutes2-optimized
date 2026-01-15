@@ -65,7 +65,7 @@ Using a GitHub download mirror:
   --mirror-prefix "https://gh-proxy.com/"
 ```
 
-Further help see when running the script with `--help`:
+For further help, see the output when running the script with `--help`:
 
 ```
 ./sync-cn-nft.sh --help
