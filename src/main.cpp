@@ -346,7 +346,7 @@ static void usage(const char* argv0) {
 int main(int argc, char** argv) {
   std::string v4_url = "https://chnroutes2.cdn.skk.moe/chnroutes.txt"; // from SukkaW/chnroutes2-optimized README :contentReference[oaicite:4]{index=4}
   std::string v4_proto = "chnroutes2-optimized";
-  std::string v6_url = "https://ruleset.skk.moe/Clash/ip/china_ipv6.txt";
+  std::string v6_url = "https://ruleset.skk.moe/Clash/ip/china_ip_ipv6.txt";
   std::string v6_proto = "ruleset.skk.moe";
   std::string out_dir = "dist";
 
