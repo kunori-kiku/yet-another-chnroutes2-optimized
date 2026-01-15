@@ -1,0 +1,1 @@
+/home/runner/work/yet-another-chnroutes2-optimized/.codeql-scratch/dbs/cpp/working/autobuild/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/cnroutes_aggregator.dir/link.d CMakeFiles/cnroutes_aggregator.dir/src/main.cpp.o -o cnroutes_aggregator  /usr/lib/x86_64-linux-gnu/libcurl.so

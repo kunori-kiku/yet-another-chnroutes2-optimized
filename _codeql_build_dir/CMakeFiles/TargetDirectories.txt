@@ -1,0 +1,3 @@
+/home/runner/work/yet-another-chnroutes2-optimized/yet-another-chnroutes2-optimized/_codeql_build_dir/CMakeFiles/cnroutes_aggregator.dir
+/home/runner/work/yet-another-chnroutes2-optimized/yet-another-chnroutes2-optimized/_codeql_build_dir/CMakeFiles/edit_cache.dir
+/home/runner/work/yet-another-chnroutes2-optimized/yet-another-chnroutes2-optimized/_codeql_build_dir/CMakeFiles/rebuild_cache.dir
