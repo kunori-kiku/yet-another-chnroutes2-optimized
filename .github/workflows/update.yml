@@ -22,7 +22,7 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ libcurl4-openssl-dev
+          sudo apt-get install -y cmake g++ libcurl4-openssl-dev libboost-dev
 
       - name: Build
         run: |
@@ -33,9 +33,9 @@ jobs:
         run: |
           ./build/cnroutes_aggregator \
             --v4-url "https://chnroutes2.cdn.skk.moe/chnroutes.txt" \
-            --v4-proto "CC BY-SA 2.0" \
+            --v4-proto "chnroutes2-optimized" \
             --v6-url "https://ruleset.skk.moe/Clash/ip/china_ip_ipv6.txt" \
-            --v6-proto "CC BY-SA 2.0" \
+            --v6-proto "ruleset.skk.moe" \
             --out-dir "dist"
 
       - name: Release (stable, overwrite assets)
