@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 usage() {
   cat <<'EOF'
@@ -41,7 +41,8 @@ MIRROR_PREFIX=""
 NO_NFT_CHECK=0
 TIMEOUT=30
 
-while [[ $# -gt 0 ]]; do
+# --- arg parsing (POSIX) ---
+while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2;;
     --tag) TAG="$2"; shift 2;;
@@ -56,41 +57,52 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-
-if [[ -z "$DEST" || -z "$MODE" ]]; then
+if [ -z "$DEST" ] || [ -z "$MODE" ]; then
   echo "ERROR: --dest, --mode are required." >&2
   usage
   exit 2
 fi
 
-if [[ "$MODE" != "v4" && "$MODE" != "v6" && "$MODE" != "both" ]]; then
+if [ "$MODE" != "v4" ] && [ "$MODE" != "v6" ] && [ "$MODE" != "both" ]; then
   echo "ERROR: --mode must be v4|v6|both" >&2
   exit 2
 fi
 
 mkdir -p "$DEST"
 
-need_cmd() { command -v "$1" >/dev/null 2>&1 || { echo "ERROR: missing command: $1" >&2; exit 1; }; }
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1 || { echo "ERROR: missing command: $1" >&2; exit 1; }
+}
+
 need_cmd curl
-if [[ "$NO_NFT_CHECK" -eq 0 ]]; then
+if [ "$NO_NFT_CHECK" -eq 0 ]; then
   need_cmd nft
 fi
 
 # Normalize MIRROR_PREFIX: allow "https://gh-proxy.com" or "https://gh-proxy.com/"
-if [[ -n "$MIRROR_PREFIX" && "${MIRROR_PREFIX: -1}" != "/" ]]; then
-  MIRROR_PREFIX="${MIRROR_PREFIX}/"
+if [ -n "$MIRROR_PREFIX" ]; then
+  case "$MIRROR_PREFIX" in
+    */) : ;;
+    *) MIRROR_PREFIX="${MIRROR_PREFIX}/" ;;
+  esac
 fi
 
 origin_base="https://github.com/${REPO}/releases/download/${TAG}"
 
+# Remove trailing slashes from BASE_URL (POSIX safe)
+trim_trailing_slash() {
+  # prints trimmed version of $1
+  echo "$1" | sed 's:/*$::'
+}
+
 build_url() {
-  local asset="$1"
-  if [[ -n "$BASE_URL" ]]; then
-    # base-url is a direct base hosting assets
-    echo "${BASE_URL%/}/${asset}"
+  asset="$1"
+  if [ -n "$BASE_URL" ]; then
+    b="$(trim_trailing_slash "$BASE_URL")"
+    echo "${b}/${asset}"
   else
-    local u="${origin_base}/${asset}"
-    if [[ -n "$MIRROR_PREFIX" ]]; then
+    u="${origin_base}/${asset}"
+    if [ -n "$MIRROR_PREFIX" ]; then
       echo "${MIRROR_PREFIX}${u}"
     else
       echo "${u}"
@@ -99,80 +111,111 @@ build_url() {
 }
 
 is_non_empty_nft() {
-  local file="$1"
-  grep -Eq '^\s*set\s+[A-Za-z0-9_]+\s*\{' "$file" || return 1
+  file="$1"
+  # must have "set NAME {"
+  grep -Eq '^[[:space:]]*set[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\{' "$file" || return 1
+  # must contain at least one CIDR-like token (rough heuristic)
   grep -Eq '([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}|:[0-9A-Fa-f]*::?[0-9A-Fa-f:]*/[0-9]{1,3}' "$file" || return 1
   return 0
 }
 
 nft_check_set_only() {
-  local nftfile="$1"
-  local tmpdir="$2"
-  local wrapper="${tmpdir}/wrapper.nft"
+  nftfile="$1"
+  tmpdir="$2"
+  wrapper="${tmpdir}/wrapper.nft"
 
   # Resolve to an absolute path where possible, to avoid ambiguous includes.
-  local nftfile_abs
-  if nftfile_abs="$(realpath "$nftfile" 2>/dev/null)"; then
-    :
-  else
-    nftfile_abs="$nftfile"
+  nftfile_abs="$nftfile"
+  if command -v realpath >/dev/null 2>&1; then
+    rp="$(realpath "$nftfile" 2>/dev/null || true)"
+    if [ -n "$rp" ]; then
+      nftfile_abs="$rp"
+    fi
   fi
 
   # Basic validation: disallow characters that could break the quoted string.
-  if [[ "$nftfile_abs" == *$'"'* || "$nftfile_abs" == *$'\n'* ]]; then
-    echo "[ERROR] Invalid nft file path for include: ${nftfile_abs}" >&2
-    return 1
-  fi
+  case "$nftfile_abs" in
+    *\"*|*'
+'*)
+      echo "[ERROR] Invalid nft file path for include: ${nftfile_abs}" >&2
+      return 1
+      ;;
+  esac
 
   cat >"$wrapper" <<EOF
 table inet test_sync {
   include "${nftfile_abs}"
 }
 EOF
+
   nft -c -f "$wrapper" >/dev/null 2>&1
 }
 
 fetch_one() {
-  local asset="$1"
-  local local_name="$2"
-  local url
+  asset="$1"
+  local_name="$2"
   url="$(build_url "$asset")"
 
-  local tmpdir
   tmpdir="$(mktemp -d)"
-  trap 'rm -rf "$tmpdir"' RETURN
+  tmpfile="${tmpdir}/${local_name}.new"
 
-  local tmpfile="${tmpdir}/${local_name}.new"
+  # Ensure cleanup on any return from this function call path
+  # (POSIX sh: no RETURN trap, so explicit cleanup is safest)
+  cleanup() { rm -rf "$tmpdir"; }
+  # shellcheck disable=SC2064
+  trap 'cleanup' INT TERM HUP EXIT
 
   echo "[INFO] Fetching: ${url}"
-  curl -LfsS --connect-timeout "$TIMEOUT" --max-time "$TIMEOUT" "$url" -o "$tmpfile"
+  if ! curl -LfsS --connect-timeout "$TIMEOUT" --max-time "$TIMEOUT" "$url" -o "$tmpfile"; then
+    echo "[ERROR] Download failed: ${url}" >&2
+    cleanup
+    trap - INT TERM HUP EXIT
+    return 1
+  fi
 
   if ! is_non_empty_nft "$tmpfile"; then
     echo "[ERROR] Fetched file looks empty or malformed: ${asset}" >&2
     echo "        Refusing to overwrite local file." >&2
+    cleanup
+    trap - INT TERM HUP EXIT
     return 1
   fi
 
-  if [[ "$NO_NFT_CHECK" -eq 0 ]]; then
+  if [ "$NO_NFT_CHECK" -eq 0 ]; then
     if ! nft_check_set_only "$tmpfile" "$tmpdir"; then
       echo "[ERROR] nft syntax check failed for: ${asset}" >&2
       echo "        Refusing to overwrite local file." >&2
+      cleanup
+      trap - INT TERM HUP EXIT
       return 1
     fi
   fi
 
-  local dest_path="${DEST}/${local_name}"
-  local bak_path="${DEST}/${local_name}.bak"
+  dest_path="${DEST}/${local_name}"
+  bak_path="${DEST}/${local_name}.bak"
 
-  [[ -f "$dest_path" ]] && cp -f "$dest_path" "$bak_path" || true
+  if [ -f "$dest_path" ]; then
+    cp -f "$dest_path" "$bak_path" >/dev/null 2>&1 || true
+  fi
+
   mv -f "$tmpfile" "$dest_path"
 
   echo "[OK] Updated: ${dest_path}"
+
+  cleanup
+  trap - INT TERM HUP EXIT
+  return 0
 }
 
 case "$MODE" in
-  v4)   fetch_one "cn4.nft" "cn4.nft" ;;
-  v6)   fetch_one "cn6.nft" "cn6.nft" ;;
-  both) fetch_one "cn4.nft" "cn4.nft"
-        fetch_one "cn6.nft" "cn6.nft" ;;
+  v4)
+    fetch_one "cn4.nft" "cn4.nft"
+    ;;
+  v6)
+    fetch_one "cn6.nft" "cn6.nft"
+    ;;
+  both)
+    fetch_one "cn4.nft" "cn4.nft"
+    fetch_one "cn6.nft" "cn6.nft"
+    ;;
 esac
