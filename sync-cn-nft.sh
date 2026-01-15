@@ -109,9 +109,24 @@ nft_check_set_only() {
   local nftfile="$1"
   local tmpdir="$2"
   local wrapper="${tmpdir}/wrapper.nft"
+
+  # Resolve to an absolute path where possible, to avoid ambiguous includes.
+  local nftfile_abs
+  if nftfile_abs="$(realpath "$nftfile" 2>/dev/null)"; then
+    :
+  else
+    nftfile_abs="$nftfile"
+  fi
+
+  # Basic validation: disallow characters that could break the quoted string.
+  if [[ "$nftfile_abs" == *$'"'* || "$nftfile_abs" == *$'\n'* ]]; then
+    echo "[ERROR] Invalid nft file path for include: ${nftfile_abs}" >&2
+    return 1
+  fi
+
   cat >"$wrapper" <<EOF
 table inet test_sync {
-  include "${nftfile}"
+  include "${nftfile_abs}"
 }
 EOF
   nft -c -f "$wrapper" >/dev/null 2>&1
