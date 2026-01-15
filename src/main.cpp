@@ -269,6 +269,10 @@ static void write_txt(const std::string& path,
                       const std::vector<Source>& sources,
                       const std::string& generated_at) {
   std::ofstream f(path, std::ios::out | std::ios::trunc);
+  if (!f) {
+    std::cerr << "Failed to open file for writing: " << path << std::endl;
+    return;
+  }
   f << "# generated_at=" << generated_at << "\n";
   for (const auto& s : sources) {
     if (s.ipver == ipver) f << "# source[" << s.proto_name << "]=" << s.url << "\n";
