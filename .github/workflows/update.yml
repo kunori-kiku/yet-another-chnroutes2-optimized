@@ -29,25 +29,45 @@ jobs:
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build -j
 
-      - name: Generate outputs
+      - name: Generate outputs (with retry)
         run: |
-          ./build/cnroutes_aggregator \
-            --v4-url "https://chnroutes2.cdn.skk.moe/chnroutes.txt" \
-            --v4-proto "chnroutes2-optimized" \
-            --v6-url "https://ruleset.skk.moe/Clash/ip/china_ip_ipv6.txt" \
-            --v6-proto "ruleset.skk.moe" \
-            --out-dir "dist"
+          MAX_ATTEMPTS=3
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            echo "Attempt $i..."
+            ./build/cnroutes_aggregator \
+              --v4-url "https://chnroutes2.cdn.skk.moe/chnroutes.txt" \
+              --v4-proto "chnroutes2-optimized" \
+              --v6-url "https://ruleset.skk.moe/Clash/ip/china_ip_ipv6.txt" \
+              --v6-proto "ruleset.skk.moe" \
+              --out-dir "dist" && break
+            echo "Attempt $i failed."
+            [ "$i" -lt "$MAX_ATTEMPTS" ] && sleep 30
+          done
 
-      - name: Release (stable, overwrite assets)
+      - name: Validate outputs
+        run: |
+          for f in dist/ip4.txt dist/ip6.txt dist/cn4.nft dist/cn6.nft; do
+            if [ ! -s "$f" ]; then
+              echo "ERROR: output file missing or empty: $f" >&2
+              exit 1
+            fi
+            echo "OK: $f ($(wc -l < "$f") lines)"
+          done
+
+      - name: Delete existing release and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete cnroutes-latest --yes --cleanup-tag || true
+
+      - name: Release (stable, recreate)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "cnroutes-latest"
           name: "CN Routes (auto)"
-          target_commitish: ${{ github.sha }}
           draft: false
           prerelease: false
           make_latest: true
-          overwrite_files: true
           fail_on_unmatched_files: true
           files: |
             dist/ip4.txt
