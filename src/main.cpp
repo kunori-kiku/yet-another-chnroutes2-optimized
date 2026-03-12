@@ -262,7 +262,7 @@ static std::vector<std::pair<uint32_t, int>> interval_to_cidrs_v4(uint32_t l, ui
   return out;
 }
 
-static void write_txt(const std::string& path,
+static bool write_txt(const std::string& path,
                       int ipver,
                       const std::vector<std::pair<u128, int>>& cidrs_v6,
                       const std::vector<std::pair<uint32_t, int>>& cidrs_v4,
@@ -271,7 +271,7 @@ static void write_txt(const std::string& path,
   std::ofstream f(path, std::ios::out | std::ios::trunc);
   if (!f) {
     std::cerr << "Failed to open file for writing: " << path << std::endl;
-    return;
+    return false;
   }
   f << "# generated_at=" << generated_at << "\n";
   for (const auto& s : sources) {
@@ -288,9 +288,10 @@ static void write_txt(const std::string& path,
       f << u128_to_ipv6(addr) << "/" << p << "\n";
     }
   }
+  return true;
 }
 
-static void write_set_only_nft(const std::string& path,
+static bool write_set_only_nft(const std::string& path,
                                int ipver,
                                const std::string& set_name,
                                const std::vector<std::pair<u128, int>>& cidrs_v6,
@@ -300,7 +301,7 @@ static void write_set_only_nft(const std::string& path,
   std::ofstream f(path, std::ios::out | std::ios::trunc);
   if (!f) {
     std::cerr << "Failed to open file for writing: " << path << std::endl;
-    return;
+    return false;
   }
 
   f << "# generated_at=" << generated_at << "\n";
@@ -329,6 +330,7 @@ static void write_set_only_nft(const std::string& path,
 
   f << "  }\n";
   f << "}\n";
+  return true;
 }
 
 static std::string now_iso8601_utc() {
@@ -453,12 +455,12 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  write_txt(out_dir + "/ip4.txt", 4, cidr6, cidr4, sources, ts);
-  write_txt(out_dir + "/ip6.txt", 6, cidr6, cidr4, sources, ts);
+  if (!write_txt(out_dir + "/ip4.txt", 4, cidr6, cidr4, sources, ts)) return 1;
+  if (!write_txt(out_dir + "/ip6.txt", 6, cidr6, cidr4, sources, ts)) return 1;
 
   // IMPORTANT: separate tables to avoid duplicate table declaration if both included
-  write_set_only_nft(out_dir + "/cn4.nft", 4, "cn4", cidr6, cidr4, sources, ts);
-  write_set_only_nft(out_dir + "/cn6.nft", 6, "cn6", cidr6, cidr4, sources, ts);
+  if (!write_set_only_nft(out_dir + "/cn4.nft", 4, "cn4", cidr6, cidr4, sources, ts)) return 1;
+  if (!write_set_only_nft(out_dir + "/cn6.nft", 6, "cn6", cidr6, cidr4, sources, ts)) return 1;
 
 
   curl_global_cleanup();
